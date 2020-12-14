@@ -79,14 +79,21 @@ bot.action(/next_(.*)/, async ctx => {
 
       if (book) {
         const part = book.parts.find(chunk => chunk.id == id)
+        const oldPart = book.parts.find(chunk => chunk.id == (id - 1))
 
         if (part) {
-          msg.send(userId, part.part, m.build([m.cbb("Далее", `next_${id + 1}`)]))
+          ctx.editMessageText(oldPart.part)
+          msg.send(userId, part.part, m.build(
+            [
+              m.cbb("Далее", `next_${id + 1}`),
+              m.cbb("Отмена", `cancel_read`)
+            ]
+          ))
         } else {
           await users.updateOne({ userId }, { $set: { inRead: false } })
           await books.updateOne({ userId, inRead: true }, { $set: { inRead: false } })
 
-          msg.send(ctx, `Ты прочитал книгу!`)
+          msg.send(userId, `Вы прочитали книгу!`)
         }
       } else {
         msg.edit(ctx, `Вы ещё не читаете книгу.`)
@@ -94,6 +101,16 @@ bot.action(/next_(.*)/, async ctx => {
     } else {
       msg.edit(ctx, `Вы ещё не читаете книгу.`)
     }
+  }, ctx)
+})
+
+bot.action("cancel_read", async ctx => {
+  const userId = ctx.from.id
+
+  check.candidate({ userId }, async user => {
+    await books.deleteOne({ userId, inRead: true })
+    await users.updateOne({ userId }, { $set: { inRead: false } })
+    msg.send(userId, "Вы отменили чтение книги!")
   }, ctx)
 })
 
