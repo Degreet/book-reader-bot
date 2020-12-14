@@ -4,7 +4,8 @@ module.exports = {
   },
 
   edit(ctx, msg, extra) {
-    ctx.editMessageText(msg, { parse_mode: "html", ...extra })
+    ctx.deleteMessage()
+    ctx.replyWithHTML(msg, extra)
   },
 
   delLast(ctx) {

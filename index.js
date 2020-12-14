@@ -21,25 +21,56 @@ const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology:
 bot.command("start", async ctx => {
   const userId = ctx.from.id
   msg.send(userId, `👋 Привет, <b>${ctx.from.first_name}</b>!`)
-})
 
-bot.on("document", async ctx => {
-  const fileId = ctx.message.document.file_id
-  const fileLink = await bot.telegram.getFileLink(fileId)
-  https.get(fileLink, resp => {
-    const file = fs.createWriteStream("_" + ctx.message.document.file_name)
-    resp.pipe(file)
-    file.on("end", () => {
-      fs.readFile(`_${ctx.message.document.file_name}`, buffer => {
-        const text = buffer.toString()
-        msg.edit(ctx, text.slice(0,))
-      })
+  check.candidate({ userId }, () => { }, async () => {
+    await users.insertOne({
+      userId
     })
   })
 })
 
+bot.on("document", async ctx => {
+  const userId = ctx.from.id
+
+  check.candidate({ userId }, async user => {
+    if (user.inRead) {
+      msg.edit(ctx, "Для начала дочитайте книгу, или отмените её чтение!")
+    } else {
+      const fileId = ctx.message.document.file_id
+      const fileLink = await bot.telegram.getFileLink(fileId)
+      https.get(fileLink, resp => {
+        const file = fs.createWriteStream("books/_" + ctx.message.document.file_name)
+        resp.pipe(file)
+        resp.on("end", () => {
+          fs.readFile(`books/_${ctx.message.document.file_name}`, async (err, buffer) => {
+            const text = buffer.toString()
+            const parts = splitText(text, 1000)
+
+            await books.insertOne({
+              userId,
+              parts: parts.map((part, i) => ({
+                part,
+                id: i
+              }))
+            })
+
+            await users.updateOne({ userId }, {
+              $set: {
+                inRead: true
+              }
+            })
+
+            msg.edit(ctx, parts[0], m.build([m.cbb("Далее", `next_2`)]))
+          })
+        })
+      })
+    }
+  }, ctx)
+})
+
 client.connect(err => {
-  global.users = client.db("serverdb").collection("users")
+  global.users = client.db(dbName).collection("users")
+  global.books = client.db(dbName).collection("books")
   global.bot = bot
   bot.launch()
 })
