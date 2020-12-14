@@ -51,7 +51,8 @@ bot.on("document", async ctx => {
               parts: parts.map((part, i) => ({
                 part,
                 id: i
-              }))
+              })),
+              inRead: true
             })
 
             await users.updateOne({ userId }, {
@@ -64,6 +65,34 @@ bot.on("document", async ctx => {
           })
         })
       })
+    }
+  }, ctx)
+})
+
+bot.action(/next_(.*)/, async ctx => {
+  const userId = ctx.from.id
+
+  check.candidate({ userId }, async user => {
+    if (user.inRead) {
+      const id = +ctx.match[1]
+      const book = await books.findOne({ inRead: true, userId })
+
+      if (book) {
+        const part = book.parts.find(chunk => chunk.id == id)
+
+        if (part) {
+          msg.send(userId, part.part, m.build([m.cbb("Далее", `next_${id + 1}`)]))
+        } else {
+          await users.updateOne({ userId }, { $set: { inRead: false } })
+          await books.updateOne({ userId, inRead: true }, { $set: { inRead: false } })
+
+          msg.send(ctx, `Ты прочитал книгу!`)
+        }
+      } else {
+        msg.edit(ctx, `Вы ещё не читаете книгу.`)
+      }
+    } else {
+      msg.edit(ctx, `Вы ещё не читаете книгу.`)
     }
   }, ctx)
 })
